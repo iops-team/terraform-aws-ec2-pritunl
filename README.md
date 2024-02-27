@@ -30,7 +30,7 @@ module "pritunl" {
   name                       = "example-pritunl"
   create_ssh_key             = true
   backups                    = true
-  backups_cron               = "0 2 * * *"
+  backups_cron               = "cron(0 0 * * ? *)"
   instance_type              = "t2.micro"
   vpc_id                     = "vpc-0d7be8904638ef5fb"
   subnet_id                  = "subnet-06442a69eb3006b2e"
