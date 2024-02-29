@@ -345,7 +345,7 @@ resource "aws_ssm_document" "cloud_init_wait" {
 resource "aws_ssm_document" "backups_sript" {
   count = var.backups ? 1 : 0
 
-  name            = "${var.name}_bakup_mongodb"
+  name            = "${var.name}_backup_mongodb"
   document_type   = "Command"
   document_format = "JSON"
   content         = <<DOC
