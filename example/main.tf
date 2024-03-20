@@ -37,8 +37,15 @@ module "pritunl" {
       description = "HTTPS access"
     },
     {
-      from_port   = 1194,
-      to_port     = 1194,
+      from_port   = "1194",
+      to_port     = "1200",
+      protocol    = "tcp",
+      cidr_blocks = ["0.0.0.0/0"],
+      description = "VPN access"
+    },
+    {
+      from_port   = "1194",
+      to_port     = "1200",
       protocol    = "udp",
       cidr_blocks = ["0.0.0.0/0"],
       description = "VPN access"

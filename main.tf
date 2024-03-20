@@ -132,9 +132,9 @@ resource "aws_instance" "pritunl" {
 
   tags = var.tags
 
-  # lifecycle {
-  #   ignore_changes = user_data
-  # }
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
 module "key_pair" {
