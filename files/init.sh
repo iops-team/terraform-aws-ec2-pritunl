@@ -60,7 +60,7 @@ if [ "${AUTO_RESTORE}" = "true" ]; then
         setup_pritunl_credentials
     else
         # Check if the backup file exists
-        BACKUP_FILE="s3://${BUCKET_NAME}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz"
+        BACKUP_FILE="s3://${BUCKET_NAME}/mongodb_backup.gz"
         if aws s3 ls "${BACKUP_FILE}" 2>&1 | grep -q 'NoSuchKey'; then
             echo "Backup file does not exist, proceeding with default setup."
             setup_pritunl_credentials
