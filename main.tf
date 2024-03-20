@@ -110,9 +110,9 @@ resource "aws_instance" "pritunl" {
     CLOUD_WATCH                 = var.cloudwatch_logs ? "true" : "false",
     CW_LOGS_GROUP               = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
     BACKUPS                     = var.backups ? "true" : "false",
-    BACKUP_CRON                 = var.backups ? var.backups_cron : "",
     BUCKET_NAME                 = var.backups ? module.s3[0].s3_bucket_id : "",
     AWS_DEFAULT_REGION          = data.aws_region.current.name,
+    AUTO_RESTORE                = var.auto_restore
 
   })
   iam_instance_profile = aws_iam_instance_profile.pritunl.name
