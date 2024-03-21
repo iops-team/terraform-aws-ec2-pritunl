@@ -48,7 +48,6 @@ sudo systemctl restart pritunl
 if [ "${AUTO_RESTORE}" = "true" ]; then
     echo "AUTO_RESTORE is set to true, starting restore process..."
     INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
-    # Запускаємо SSM документ для відновлення MongoDB
     aws ssm send-command --document-name "$SSM_DOCUMENT_NAME" \
                          --targets Key=instanceids,Values=$INSTANCE_ID \
                          --parameters '{}' \
