@@ -33,11 +33,40 @@ data "aws_iam_policy_document" "backups" {
   statement {
     actions = [
       "s3:PutObject",
+      "s3:GetObject",
     ]
     effect    = "Allow"
-    resources = [module.s3[0].s3_bucket_arn]
+    resources = ["${module.s3[0].s3_bucket_arn}/*"]
   }
 }
+
+
+resource "aws_iam_policy" "ssm_send_command_pritunl" {
+  name        = "SSMSendCommandPritunlPolicy"
+  description = "Policy to allow sending commands via SSM to the Pritunl instance"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "ssm:SendCommand",
+        Resource = [
+          aws_instance.pritunl.arn,
+          aws_ssm_document.restore_mongodb.arn
+        ]
+      },
+    ],
+  })
+}
+
+
+resource "aws_iam_policy_attachment" "ssm_send_command_attachment" {
+  name       = "SSMSendCommandPolicyAttachment"
+  policy_arn = aws_iam_policy.ssm_send_command_pritunl.arn
+  roles      = [aws_iam_role.pritunl.name]
+}
+
 
 resource "aws_iam_role" "pritunl" {
   name = local.iam_role_default_name
@@ -110,9 +139,12 @@ resource "aws_instance" "pritunl" {
     CLOUD_WATCH                 = var.cloudwatch_logs ? "true" : "false",
     CW_LOGS_GROUP               = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
     BACKUPS                     = var.backups ? "true" : "false",
-    BACKUP_CRON                 = var.backups ? var.backups_cron : "",
     BUCKET_NAME                 = var.backups ? module.s3[0].s3_bucket_id : "",
     AWS_DEFAULT_REGION          = data.aws_region.current.name,
+    AUTO_RESTORE                = var.auto_restore
+    BACKUP_FILE                 = ""
+    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb.name
+
 
   })
   iam_instance_profile = aws_iam_instance_profile.pritunl.name
@@ -358,8 +390,9 @@ resource "aws_ssm_document" "backups_sript" {
       "name": "BackupMongoToS3",
       "inputs": {
         "runCommand": [
-          "mongodump --gzip --archive=mongodb_backup.gz | aws s3 cp - s3://${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz",
-          "rm mongodb_backup.gz"
+          "mongodump --gzip --archive=/tmp/mongodb_backup.gz",
+          "aws s3 cp /tmp/mongodb_backup.gz s3://${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz",
+          "rm /tmp/mongodb_backup.gz"
         ]
       }
     }
@@ -384,3 +417,26 @@ resource "aws_ssm_association" "backup" {
 
 }
 
+resource "aws_ssm_document" "restore_mongodb" {
+  name          = "restore-mongodb-backup"
+  document_type = "Command"
+
+  content = jsonencode({
+    schemaVersion = "2.2",
+    description   = "Restore MongoDB from S3 backup",
+    mainSteps     = [
+      {
+        action = "aws:runShellScript",
+        name   = "restoreBackup",
+        inputs = {
+          runCommand = [
+            "echo 'Restoring from backup...'",
+            "aws s3 cp s3://${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz ./mongodb_backup.gz",
+            "mongorestore --gzip --archive=mongodb_backup.gz",
+            "rm mongodb_backup.gz"
+          ]
+        }
+      }
+    ]
+  })
+}
