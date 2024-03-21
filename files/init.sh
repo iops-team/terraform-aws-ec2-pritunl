@@ -3,12 +3,11 @@
 # Define environment variables
 SSM_PATH_DEFAULT_CREDENTIAL="${SSM_PATH_DEFAULT_CREDENTIAL}"
 CLOUD_WATCH="${CLOUD_WATCH}"
-BACKUPS="${BACKUPS}"
-BACKUP_CRON="${BACKUP_CRON}"
 BUCKET_NAME="${BUCKET_NAME}"
 AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION}"
 CW_LOGS_GROUP="${CW_LOGS_GROUP}"
 AUTO_RESTORE="${AUTO_RESTORE}"
+SSM_DOCUMENT_NAME="${SSM_DOCUMENT_NAME}"
 
 export AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION
 
@@ -46,33 +45,14 @@ sudo systemctl start mongod pritunl
 sudo pritunl set-mongodb mongodb://localhost:27017/pritunl
 sudo systemctl restart pritunl
 
-# Function to set up Pritunl default credentials
-setup_pritunl_credentials() {
-    PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')
-    aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --overwrite --type "SecureString"
-}
-
-# Check for AUTO_RESTORE condition
 if [ "${AUTO_RESTORE}" = "true" ]; then
-    # Check if bucket exists
-    if aws s3 ls "s3://${BUCKET_NAME}" 2>&1 | grep -q 'NoSuchBucket'; then
-        echo "Bucket does not exist, proceeding with default setup."
-        setup_pritunl_credentials
-    else
-        # Check if the backup file exists
-        BACKUP_FILE="s3://${BUCKET_NAME}/mongodb_backup.gz"
-        if aws s3 ls "${BACKUP_FILE}" 2>&1 | grep -q 'NoSuchKey'; then
-            echo "Backup file does not exist, proceeding with default setup."
-            setup_pritunl_credentials
-        else
-            echo "Restoring from backup..."
-            aws s3 cp "${BACKUP_FILE}" mongodb_backup.gz
-            mongorestore --gzip --archive=mongodb_backup.gz
-        fi
-    fi
-else
-    echo "AUTO_RESTORE is set to false, proceeding with default setup."
-    setup_pritunl_credentials
+    echo "AUTO_RESTORE is set to true, starting restore process..."
+    INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+    # Запускаємо SSM документ для відновлення MongoDB
+    aws ssm send-command --document-name "$SSM_DOCUMENT_NAME" \
+                         --targets Key=instanceids,Values=$INSTANCE_ID \
+                         --parameters '{}' \
+                         --region "$AWS_DEFAULT_REGION"                     
 fi
 
 # Install CloudWatch Agent
@@ -106,3 +86,6 @@ EOF
 
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:cloudwatch-agent-config.json -s
 fi
+PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')
+aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --type "SecureString" --overwrite    
+sudo systemctl start pritunl
