@@ -4,7 +4,7 @@ module "pritunl" {
   name                       = "example-pritunl"
   create_ssh_key             = true
   backups                    = true
-  instance_type              = "t2.micro"
+  instance_type              = "t3.micro"
   vpc_id                     = "vpc-0d7be8904638ef5fb"
   subnet_id                  = "subnet-06442a69eb3006b2e"
   monitoring                 = true
@@ -13,7 +13,7 @@ module "pritunl" {
   create_route53_record      = true
   zone_id                    = "Z069875012GQNG6IN9LUI"
   domain_name                = "vpn.example.com"
-  backups_cron               = "cron(0 0 * * ? *)"
+  backups_cron               = "cron(0 * * * ? *)"
   cloudwatch_logs_group_name = "example-pritunl-logs"
 
   tags = {

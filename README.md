@@ -31,7 +31,7 @@ module "pritunl" {
   create_ssh_key             = true
   backups                    = true
   backups_cron               = "cron(0 0 * * ? *)"
-  instance_type              = "t2.micro"
+  instance_type              = "t3.micro"
   vpc_id                     = "vpc-0d7be8904638ef5fb"
   subnet_id                  = "subnet-06442a69eb3006b2e"
   monitoring                 = true
@@ -135,6 +135,8 @@ Incorporating all possible values for each variable in a module as complex as th
 | `ingress_rules`                   | Ingress rules for the security group                           | `list(object)`| Objects containing `from_port`, `to_port`, `protocol`, `cidr_blocks`                               | `[{"from_port": 80, "to_port": 80, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"], "description": "HTTP access"}, {"from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"], "description": "HTTPS access"}]`                                                                                                                                            | No       |
 | `egress_rules`                    | Egress rules for the security group                            | `list(object)`| Objects containing `from_port`, `to_port`, `protocol`, `cidr_blocks`                               | `[{"from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"], "description": "Allow all outbound traffic"}]`                                                                                                                                                                                                                                                     | No       |
 | `s3_lifecycle_rule`               | Lifecycle rule for the S3 bucket                               | `list(object)`| Objects defining S3 bucket lifecycle rules                                                        | `[{"id": "expireBackups", "enabled": true, "abort_incomplete_multipart_upload_days": 7, "expiration": {"days": 30, "expired_object_delete_marker": false}, "noncurrent_version_expiration": [{"noncurrent_days": 60}]}]`                                                                                                                                                           | No       |
+| `auto_restore` | Try to restore from the backup if it exists, if the backup does not exist, a new user will be created | `bool` | `true`, `false` | `true` | No |
+
 
 ### Notes on Possible Values
 
