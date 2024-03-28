@@ -8,11 +8,6 @@ output "iam_instance_profile_name" {
   value       = aws_iam_instance_profile.pritunl.name
 }
 
-output "instance_id" {
-  description = "The ID of the Pritunl EC2 instance."
-  value       = aws_instance.pritunl.id
-}
-
 output "eip_public_ip" {
   description = "The Elastic IP address associated with the Pritunl instance."
   value       = aws_eip.pritunl.public_ip
@@ -51,3 +46,4 @@ output "ssm_parameter_key_pair" {
   description = "The name of the SSM parameter storing the SSH private key of the Pritunl instance."
   value       = try(aws_ssm_parameter.ec2_keypair[0].name, null)
 }
+
