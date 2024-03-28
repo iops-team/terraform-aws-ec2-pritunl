@@ -12,6 +12,7 @@ variable "create_ssh_key" {
 variable "backups" {
   description = "Flag to determine if an S3 bucket should be created."
   type        = bool
+  default     = false
 
 }
 
@@ -194,5 +195,10 @@ variable "s3_lifecycle_rule" {
 variable "auto_restore" {
   description = "Try to restore from the backup if it exists, if the backup does not exist, a new user will be created"
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "env" {
+  description = "The deployment environment for the project"
+  type        = string
 }

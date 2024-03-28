@@ -1,10 +1,11 @@
 locals {
-  ssm_path_key_pair                = "/${var.name}/pritunl_instance_private_key"
-  ssm_path_default_credentials     = "/${var.name}/pritunl_default_credenstials"
-  iam_role_default_name            = "${var.name}_pritunl_role"
-  iam_instance_profile_defaut_name = "${var.name}_pritunl_instance_profile"
-  cw_logs_default_name             = "/aws/${var.name}/pritunl_logs"
-
+  ssm_path_key_pair                = "/${var.env}/${var.name}/pritunl_instance_private_key"
+  ssm_path_default_credentials     = "/${var.env}/${var.name}/pritunl_default_credenstials"
+  iam_role_default_name            = "${var.env}_${var.name}_pritunl_role"
+  iam_policy_default_name          = "${var.env}_${var.name}"
+  iam_instance_profile_defaut_name = "${var.env}_${var.name}_pritunl_instance_profile"
+  cw_logs_default_name             = "/aws/${var.env}/${var.name}/pritunl_logs"
+  ssm_document_default_name         = "${var.env}_${var.name}"
 }
 
 data "aws_region" "current" {}
@@ -28,46 +29,6 @@ data "aws_ami" "ubuntu" {
   owners = ["099720109477"] # Canonical account ID for Ubuntu AMIs
 }
 
-data "aws_iam_policy_document" "backups" {
-  count = var.backups ? 1 : 0
-  statement {
-    actions = [
-      "s3:PutObject",
-      "s3:GetObject",
-    ]
-    effect    = "Allow"
-    resources = ["${module.s3[0].s3_bucket_arn}/*"]
-  }
-}
-
-
-resource "aws_iam_policy" "ssm_send_command_pritunl" {
-  name        = "SSMSendCommandPritunlPolicy"
-  description = "Policy to allow sending commands via SSM to the Pritunl instance"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = "ssm:SendCommand",
-        Resource = [
-          aws_instance.pritunl.arn,
-          aws_ssm_document.restore_mongodb.arn
-        ]
-      },
-    ],
-  })
-}
-
-
-resource "aws_iam_policy_attachment" "ssm_send_command_attachment" {
-  name       = "SSMSendCommandPolicyAttachment"
-  policy_arn = aws_iam_policy.ssm_send_command_pritunl.arn
-  roles      = [aws_iam_role.pritunl.name]
-}
-
-
 resource "aws_iam_role" "pritunl" {
   name = local.iam_role_default_name
 
@@ -90,6 +51,53 @@ EOF
 
 }
 
+data "aws_iam_policy_document" "autorestore" {
+  count = var.auto_restore ? 1 : 0
+
+  statement {
+    actions = [
+      "s3:GetObject",
+    ]
+    effect = "Allow"
+    resources = ["${module.s3[0].s3_bucket_arn}/*"]
+  }
+
+  statement {
+    actions = [
+      "ssm:SendCommand",
+    ]
+    effect = "Allow"
+    resources = [
+      "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/${local.ssm_document_default_name}_restore_mongodb_db"
+    ]
+  }
+
+  statement {
+    actions = [
+      "ssm:SendCommand",
+    ]
+    effect = "Allow"
+    resources = [
+      "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
+    ]
+  }
+}
+
+
+resource "aws_iam_policy" "autorestore" {
+  count      = var.auto_restore ? 1 : 0
+  name        = "${local.iam_policy_default_name}_autorestore_policy"
+  description = "Policy to allow backups and sending commands via SSM to the Pritunl instance"
+  policy      = data.aws_iam_policy_document.autorestore[0].json
+}
+
+resource "aws_iam_policy_attachment" "autorestore" {
+  count      = var.auto_restore ? 1 : 0
+  name       = "${local.iam_instance_profile_defaut_name}_autorestore_policy_attachment"
+  policy_arn = aws_iam_policy.autorestore[0].arn
+  roles      = [aws_iam_role.pritunl.name]
+}
+
 resource "aws_iam_policy" "backups" {
   count = var.backups ? 1 : 0
 
@@ -97,10 +105,15 @@ resource "aws_iam_policy" "backups" {
   tags   = var.tags
 }
 
-resource "aws_iam_instance_profile" "pritunl" {
-  name = local.iam_instance_profile_defaut_name
-  role = aws_iam_role.pritunl.name
-  tags = var.tags
+data "aws_iam_policy_document" "backups" {
+  count = var.backups ? 1 : 0
+  statement {
+    actions = [
+      "s3:PutObject",
+    ]
+    effect    = "Allow"
+    resources = ["${module.s3[0].s3_bucket_arn}/*"]       
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "backups" {
@@ -111,62 +124,90 @@ resource "aws_iam_role_policy_attachment" "backups" {
 
 }
 
+resource "aws_iam_instance_profile" "pritunl" {
+  name = local.iam_instance_profile_defaut_name
+  role = aws_iam_role.pritunl.name
+  tags = var.tags
+}
+
 resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   role       = aws_iam_role.pritunl.name
 
 }
 
-
-resource "aws_eip" "pritunl" {
-  instance = aws_instance.pritunl.id
-
-  tags = var.tags
+resource "aws_cloudwatch_log_group" "pritunl_log_group" {
+  count             = var.cloudwatch_logs ? 1 : 0
+  name              = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
+  retention_in_days = 30
+  tags              = var.tags
 }
 
-resource "aws_instance" "pritunl" {
+resource "aws_iam_policy" "cloudwatch_logs_policy" {
+  count       = var.cloudwatch_logs ? 1 : 0
+  name        = "${local.iam_policy_default_name}_cloudwatch_logs_policy"
+  description = "A policy that allows publishing logs to CloudWatch"
 
-  ami               = data.aws_ami.ubuntu.id
-  instance_type     = var.instance_type
-  availability_zone = data.aws_availability_zones.available.names[0]
-  key_name          = var.create_ssh_key ? module.key_pair[0].key_pair_name : null
-
-  vpc_security_group_ids = [aws_security_group.pritunl.id]
-  subnet_id              = var.subnet_id
-  monitoring             = var.monitoring
-  user_data = templatefile("${path.module}/files/init.sh", {
-    SSM_PATH_DEFAULT_CREDENTIAL = local.ssm_path_default_credentials,
-    CLOUD_WATCH                 = var.cloudwatch_logs ? "true" : "false",
-    CW_LOGS_GROUP               = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
-    BACKUPS                     = var.backups ? "true" : "false",
-    BUCKET_NAME                 = var.backups ? module.s3[0].s3_bucket_id : "",
-    AWS_DEFAULT_REGION          = data.aws_region.current.name,
-    AUTO_RESTORE                = var.auto_restore
-    BACKUP_FILE                 = ""
-    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb.name
-
-
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"],
+        Effect   = "Allow",
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+      },
+    ],
   })
-  iam_instance_profile = aws_iam_instance_profile.pritunl.name
+}
 
-  dynamic "root_block_device" {
-    for_each = var.root_block_device
-    content {
-      volume_type           = root_block_device.value.volume_type
-      throughput            = root_block_device.value.throughput
-      volume_size           = root_block_device.value.volume_size
-      encrypted             = root_block_device.value.encrypted
-      kms_key_id            = root_block_device.value.kms_key_id != "" ? root_block_device.value.kms_key_id : null
-      iops                  = root_block_device.value.iops
-      delete_on_termination = root_block_device.value.delete_on_termination
-    }
-  }
+resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
+  count      = var.cloudwatch_logs ? 1 : 0
+  role       = aws_iam_role.pritunl.name
+  policy_arn = aws_iam_policy.cloudwatch_logs_policy[0].arn
+}
 
-  tags = var.tags
+resource "aws_iam_policy" "ssm_put_parameter" {
+  name        = "${local.iam_policy_default_name}_ssm_put_parametr_policy"
+  description = "Policy to allow put parameter in SSM Parameter Store"
 
-  lifecycle {
-    ignore_changes = [ami]
-  }
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/*"
+      },
+    ],
+  })
+}
+
+resource "aws_iam_policy_attachment" "ssm_put_parameter_attachment" {
+  name       = "${local.iam_policy_default_name}_ssm_put_parameter_attachment_policy"
+  roles      = [aws_iam_role.pritunl.name]
+  policy_arn = aws_iam_policy.ssm_put_parameter.arn
+
+}
+
+resource "aws_iam_policy" "AssociateEIP" {
+  name   = "${local.iam_policy_default_name}_eip_associate_policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "ec2:AssociateAddress",
+        Resource = "*"
+        }
+    ]
+  })
+}
+
+resource "aws_iam_policy_attachment" "attachEIP" {
+  name       = "${local.iam_policy_default_name}_eip_attachment_policy"
+  roles      = [aws_iam_role.pritunl.name]
+  policy_arn = aws_iam_policy.AssociateEIP.arn
+
 }
 
 module "key_pair" {
@@ -201,12 +242,104 @@ resource "aws_ssm_parameter" "default_credential" {
   tags = var.tags
 }
 
+resource "aws_ssm_document" "cloud_init_wait" {
+  count = var.wait_for_installation ? 1 : 0
+
+  name            = "${local.ssm_document_default_name}_cloud_init_wait"
+  document_type   = "Command"
+  document_format = "YAML"
+  content         = <<-DOC
+    schemaVersion: '2.2'
+    description: Wait for cloud init to finish
+    mainSteps:
+    - action: aws:runShellScript
+      name: WaitUserdata
+      precondition:
+        StringEquals:
+        - platformType
+        - Linux
+      inputs:
+        runCommand:
+        - cloud-init status --wait
+    DOC
+  tags            = var.tags
+}
+
+resource "aws_ssm_document" "backups_script" {
+  count = var.backups ? 1 : 0
+
+  name            = "${local.ssm_document_default_name}_backup_mongodb"
+  document_type   = "Command"
+  document_format = "JSON"
+  content         = <<DOC
+{
+  "schemaVersion": "2.2",
+  "description": "Configure crontab for MongoDB backups to S3",
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "BackupMongoToS3",
+      "inputs": {
+        "runCommand": [
+          "mongodump --gzip --archive=/tmp/mongodb_backup.gz",
+          "aws s3 cp /tmp/mongodb_backup.gz s3://${var.env}-${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz",
+          "rm /tmp/mongodb_backup.gz"
+        ]
+      }
+    }
+  ]
+}
+DOC
+  tags            = var.tags
+}
+
+resource "aws_ssm_association" "backup" {
+  count = var.backups ? 1 : 0
+
+  name                = aws_ssm_document.backups_script[0].name
+  schedule_expression = var.backups_cron
+
+  targets {
+    key    = "tag:Name"
+    values = ["${var.env}-${var.name}"]
+  }
+
+}
+
+resource "aws_ssm_document" "restore_mongodb" {
+  count = var.auto_restore ? 1 : 0
+
+  name          = "${local.ssm_document_default_name}_restore_mongodb_db"
+  document_type = "Command"
+
+  content = jsonencode({
+    schemaVersion = "2.2",
+    description   = "Restore MongoDB from S3 backup",
+    mainSteps = [
+      {
+        action = "aws:runShellScript",
+        name   = "restoreBackup",
+        inputs = {
+          runCommand = [
+            "echo 'Restoring from backup...'",
+            "aws s3 cp s3://${var.env}-${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz ./mongodb_backup.gz",
+            "mongorestore --gzip --archive=mongodb_backup.gz",
+            "rm ./mongodb_backup.gz",
+            "PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')",
+            "aws ssm put-parameter --region ${data.aws_region.current.name} --name ${local.ssm_path_default_credentials} --type 'SecureString' --value \"$PRITUNL_DEFAULT_CREDENTIALS\" --overwrite"
+          ]
+        }
+      }
+    ]
+  })
+}
+
 module "s3" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 3.0"
-  count   = var.backups ? 1 : 0
+  count   = var.backups || var.auto_restore ? 1 : 0
 
-  bucket = "${var.name}-backups-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.env}-${var.name}-backups-${data.aws_caller_identity.current.account_id}"
 
   # S3 bucket-level Public Access Block configuration
   block_public_acls       = true
@@ -223,10 +356,9 @@ module "s3" {
 }
 
 resource "aws_security_group" "pritunl" {
-  name        = var.name
+  name        = "${var.env}-${var.name}-security-group"
   description = "Security group for Pritunl"
   vpc_id      = var.vpc_id
-
 
   dynamic "ingress" {
     for_each = var.ingress_rules
@@ -252,66 +384,8 @@ resource "aws_security_group" "pritunl" {
   tags = var.tags
 }
 
-
-
-
-resource "aws_iam_policy" "cloudwatch_logs_policy" {
-  count       = var.cloudwatch_logs ? 1 : 0
-  name        = "CloudWatchLogsPolicy"
-  description = "A policy that allows publishing logs to CloudWatch"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"],
-        Effect   = "Allow",
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
-      },
-    ],
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
-  count      = var.cloudwatch_logs ? 1 : 0
-  role       = aws_iam_role.pritunl.name
-  policy_arn = aws_iam_policy.cloudwatch_logs_policy[0].arn
-}
-
-resource "aws_cloudwatch_log_group" "pritunl_log_group" {
-  count             = var.cloudwatch_logs ? 1 : 0
-  name              = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
-  retention_in_days = 30
-  tags              = var.tags
-}
-
-
-resource "aws_iam_policy" "ssm_put_parameter" {
-  name        = "SSMPutParameterPolicy"
-  description = "Policy to allow put parameter in SSM Parameter Store"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = ["ssm:PutParameter"]
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/*"
-      },
-    ],
-  })
-}
-
-resource "aws_iam_policy_attachment" "ssm_put_parameter_attachment" {
-  name       = "SSMPutParameterPolicyAttachment"
-  roles      = [aws_iam_role.pritunl.name]
-  policy_arn = aws_iam_policy.ssm_put_parameter.arn
-
-}
-
-
-
 resource "aws_route53_record" "pritunl" {
+
   count   = var.create_route53_record ? 1 : 0
   zone_id = var.zone_id
   name    = var.domain_name
@@ -319,24 +393,113 @@ resource "aws_route53_record" "pritunl" {
   ttl     = "300"
   records = [aws_eip.pritunl.public_ip]
 
-
 }
 
+resource "aws_eip" "pritunl" {
+  vpc = true
+  tags = merge(
+    var.tags,
+    {
+      "Name" = "${var.env}-${var.name}"
+    }
+  )
+}
+
+resource "aws_launch_template" "pritunl" {
+  name_prefix   = "${var.env}-${var.name}-launch-template"
+  image_id      = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  key_name      = var.create_ssh_key ? module.key_pair[0].key_pair_name : null
+
+  block_device_mappings {
+    device_name = "/dev/sda1"
+
+    ebs {
+      volume_size           = var.root_block_device[0].volume_size
+      volume_type           = var.root_block_device[0].volume_type
+      delete_on_termination = var.root_block_device[0].delete_on_termination
+      encrypted             = var.root_block_device[0].encrypted
+      kms_key_id            = var.root_block_device[0].kms_key_id != "" ? var.root_block_device[0].kms_key_id : null
+      throughput            = var.root_block_device[0].throughput
+      iops                  = var.root_block_device[0].iops
+    }
+  }
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups = [aws_security_group.pritunl.id]
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.pritunl.name
+  }
+
+  user_data = base64encode(templatefile("${path.module}/files/init.sh", {
+    SSM_PATH_DEFAULT_CREDENTIAL = local.ssm_path_default_credentials,
+    CLOUD_WATCH                 = var.cloudwatch_logs ? "true" : "false",
+    CW_LOGS_GROUP               = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name),
+    BACKUPS                     = var.backups ? "true" : "false",
+    BUCKET_NAME                 = var.backups ? module.s3[0].s3_bucket_id : "",
+    AWS_DEFAULT_REGION          = data.aws_region.current.name,
+    AUTO_RESTORE                = var.auto_restore
+    BACKUP_FILE                 = ""
+    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb[0].name
+    EIP_ID                      = aws_eip.pritunl.id
+
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = var.tags
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "pritunl" {
+
+  launch_template {
+    id      = aws_launch_template.pritunl.id
+    version = "$Latest"
+  }
+
+  min_size         = 1
+  max_size         = 1
+  desired_capacity = 1
+  vpc_zone_identifier = [var.subnet_id]
+
+  tag {
+    key                 = "Name"
+    value               = "${var.env}-${var.name}"
+    propagate_at_launch = true    
+  }
+  dynamic "tag" {
+    for_each = var.tags
+
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+}
 
 resource "null_resource" "wait_for_installation_pritunl" {
   count = var.wait_for_installation ? 1 : 0
-
   triggers = {
-    instance_id = aws_instance.pritunl.id
+    autoscaling_group_name = aws_autoscaling_group.pritunl.name
   }
 
   provisioner "local-exec" {
     command = <<EOT
 sleep 60
+instance_ids=$(aws autoscaling describe-auto-scaling-groups --region "${data.aws_region.current.name}" --auto-scaling-group-names "${aws_autoscaling_group.pritunl.name}" --query "AutoScalingGroups[0].Instances[*].InstanceId" --output text)
 success=false
 while [[ $success == false ]]; do
-  if command_id=$(aws ssm send-command --region "${data.aws_region.current.name}" --document-name ${aws_ssm_document.cloud_init_wait[0].name} --instance-ids "${aws_instance.pritunl.id}" --output text --query "Command.CommandId"); then
-    if aws ssm wait command-executed --region "${data.aws_region.current.name}" --command-id "$command_id" --instance-id "${aws_instance.pritunl.id}"; then
+  if command_id=$(aws ssm send-command --region "${data.aws_region.current.name}" --document-name ${aws_ssm_document.cloud_init_wait[0].name} --instance-ids $instance_ids --output text --query "Command.CommandId"); then
+    if aws ssm wait command-executed --region "${data.aws_region.current.name}" --command-id "$command_id" --instance-id $instance_ids; then
       success=true
       echo "Pritunl successfully installed."
       break
@@ -348,95 +511,4 @@ while [[ $success == false ]]; do
 done
 EOT
   }
-}
-
-resource "aws_ssm_document" "cloud_init_wait" {
-  count = var.wait_for_installation ? 1 : 0
-
-  name            = "${var.name}-cloud-init-wait"
-  document_type   = "Command"
-  document_format = "YAML"
-  content         = <<-DOC
-    schemaVersion: '2.2'
-    description: Wait for cloud init to finish
-    mainSteps:
-    - action: aws:runShellScript
-      name: WaitUserdata
-      precondition:
-        StringEquals:
-        - platformType
-        - Linux
-      inputs:
-        runCommand:
-        - cloud-init status --wait
-    DOC
-  tags            = var.tags
-}
-
-
-resource "aws_ssm_document" "backups_sript" {
-  count = var.backups ? 1 : 0
-
-  name            = "${var.name}_backup_mongodb"
-  document_type   = "Command"
-  document_format = "JSON"
-  content         = <<DOC
-{
-  "schemaVersion": "2.2",
-  "description": "Configure crontab for MongoDB backups to S3",
-  "mainSteps": [
-    {
-      "action": "aws:runShellScript",
-      "name": "BackupMongoToS3",
-      "inputs": {
-        "runCommand": [
-          "mongodump --gzip --archive=/tmp/mongodb_backup.gz",
-          "aws s3 cp /tmp/mongodb_backup.gz s3://${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz",
-          "rm /tmp/mongodb_backup.gz"
-        ]
-      }
-    }
-  ]
-}
-DOC
-  tags            = var.tags
-}
-
-
-
-resource "aws_ssm_association" "backup" {
-  count = var.backups ? 1 : 0
-
-  name                = aws_ssm_document.backups_sript[0].name
-  schedule_expression = var.backups_cron
-
-  targets {
-    key    = "InstanceIds"
-    values = [aws_instance.pritunl.id]
-  }
-
-}
-
-resource "aws_ssm_document" "restore_mongodb" {
-  name          = "restore-mongodb-backup"
-  document_type = "Command"
-
-  content = jsonencode({
-    schemaVersion = "2.2",
-    description   = "Restore MongoDB from S3 backup",
-    mainSteps     = [
-      {
-        action = "aws:runShellScript",
-        name   = "restoreBackup",
-        inputs = {
-          runCommand = [
-            "echo 'Restoring from backup...'",
-            "aws s3 cp s3://${var.name}-backups-${data.aws_caller_identity.current.account_id}/mongodb_backup.gz ./mongodb_backup.gz",
-            "mongorestore --gzip --archive=mongodb_backup.gz",
-            "rm mongodb_backup.gz"
-          ]
-        }
-      }
-    ]
-  })
 }

@@ -8,7 +8,8 @@ AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION}"
 CW_LOGS_GROUP="${CW_LOGS_GROUP}"
 AUTO_RESTORE="${AUTO_RESTORE}"
 SSM_DOCUMENT_NAME="${SSM_DOCUMENT_NAME}"
-
+EIP_ID="${EIP_ID}"
+INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
 export AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION
 
 # Adding swap space
@@ -45,15 +46,6 @@ sudo systemctl start mongod pritunl
 sudo pritunl set-mongodb mongodb://localhost:27017/pritunl
 sudo systemctl restart pritunl
 
-if [ "${AUTO_RESTORE}" = "true" ]; then
-    echo "AUTO_RESTORE is set to true, starting restore process..."
-    INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
-    aws ssm send-command --document-name "$SSM_DOCUMENT_NAME" \
-                         --targets Key=instanceids,Values=$INSTANCE_ID \
-                         --parameters '{}' \
-                         --region "$AWS_DEFAULT_REGION"                     
-fi
-
 # Install CloudWatch Agent
 if [ "${CLOUD_WATCH}" = "true" ]; then
 sudo wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
@@ -82,9 +74,23 @@ cat <<EOF > cloudwatch-agent-config.json
   }
 }
 EOF
-
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:cloudwatch-agent-config.json -s
 fi
+
+if [ "${AUTO_RESTORE}" = "true" ]; then
+    echo "AUTO_RESTORE is set to true, starting restore process..."
+    aws ssm send-command --document-name "$SSM_DOCUMENT_NAME" \
+                         --targets Key=instanceids,Values=$INSTANCE_ID \
+                         --parameters '{}' \
+                         --region "$AWS_DEFAULT_REGION"                     
+fi
+
 PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')
 aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --type "SecureString" --overwrite    
-sudo systemctl start pritunl
+aws ec2 associate-address --instance-id $INSTANCE_ID --allocation-id ${EIP_ID} --region ${AWS_DEFAULT_REGION}
+if systemctl is-active --quiet pritunl; then
+  :
+else
+  sleep 60
+  sudo systemctl start pritunl
+fi

@@ -2,8 +2,10 @@ module "pritunl" {
   source = "../"
 
   name                       = "example-pritunl"
+  env                        = "prod"
   create_ssh_key             = true
   backups                    = true
+  auto_restore               = true
   instance_type              = "t3.micro"
   vpc_id                     = "vpc-0d7be8904638ef5fb"
   subnet_id                  = "subnet-06442a69eb3006b2e"
@@ -17,7 +19,6 @@ module "pritunl" {
   cloudwatch_logs_group_name = "example-pritunl-logs"
 
   tags = {
-    Environment = "production"
     Project     = "Pritunl VPN"
   }
 
