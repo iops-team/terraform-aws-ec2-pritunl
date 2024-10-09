@@ -4,7 +4,7 @@ This Terraform module is designed to deploy a Pritunl VPN server on AWS. It auto
 
 #### Features
 
-- **EC2 Instance**: Automatically creates an EC2 instance using a specified Ubuntu AMI.
+- **EC2 Instance**: Automatically creates an EC2 instance using a specified Ubuntu AMI and autosclaling group.
 - **IAM Roles and Policies**: Creates IAM roles and policies for managing access to AWS resources.
 - **S3 Bucket**: Optionally creates an S3 bucket for storing backups.
 - **CloudWatch Logs**: Optionally configures CloudWatch Logs for server logging.
@@ -13,6 +13,7 @@ This Terraform module is designed to deploy a Pritunl VPN server on AWS. It auto
 - **SSH Key Pair**: Optionally creates an SSH key for access to the EC2 instance.
 - **Route53 Record**: Optionally creates a DNS record in Route53 for the EC2 instance.
 - **SSM Parameters**: Stores configuration data in SSM Parameter Store.
+
 
 #### Requirements
 
@@ -28,8 +29,10 @@ module "pritunl" {
   source = "iops-team/ec2-pritunl/aws"
 
   name                       = "example-pritunl"
+  env                        = "production
   create_ssh_key             = true
   backups                    = true
+  auto_restore               = true
   backups_cron               = "cron(0 0 * * ? *)"
   instance_type              = "t3.micro"
   vpc_id                     = "vpc-0d7be8904638ef5fb"
@@ -42,7 +45,7 @@ module "pritunl" {
   domain_name                = "vpn.example.com"
 
   tags = {
-    Environment = "production"
+    build = "production"
     Project     = "Pritunl VPN"
   }
 
@@ -119,6 +122,7 @@ Incorporating all possible values for each variable in a module as complex as th
 | Name                              | Description                                                    | Type          | Possible Values                                                                                   | Default Value                                                                                                                                                                                                                                                                                                                                                                    | Required |
 |-----------------------------------|----------------------------------------------------------------|---------------|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | `name`                            | The resource name prefix                                       | `string`      | Any valid string                                                                                   | n/a                                                                                                                                                                                                                                                                                                                                                                                | Yes      |
+| `env`                            | The resource environment prefix                                       | `string`      | Any valid string                                                                                   | n/a                                                                                                                                                                                                                                                                                                                                                                                | Yes      |
 | `create_ssh_key`                  | Flag to create an SSH key                                      | `bool`        | `true`, `false`                                                                                    | `true`                                                                                                                                                                                                                                                                                                                                                                             | No       |
 | `backups`                         | Flag to create an S3 bucket for backups                        | `bool`        | `true`, `false`                                                                                    | `false`                                                                                                                                                                                                                                                                                                                                                                            | No       |
 | `instance_type`                   | EC2 instance type                                              | `string`      | Any valid EC2 instance type (e.g., `t2.micro`, `t3.medium`)                                        | `"t2.micro"`                                                                                                                                                                                                                                                                                                                                                                       | No       |
@@ -149,13 +153,19 @@ This table aims to provide clarity on the input variables, ensuring users can ta
 
 #### Outputs
 
-| Name                        | Description                       |
-|-----------------------------|-----------------------------------|
-| `instance_id`               | The ID of the created EC2 instance |
-| `instance_public_ip`        | The public IP address of the EC2 instance |
-| `security_group_id`         | The ID of the Security Group      |
-| `iam_role_name`             | The name of the IAM role          |
-| `s3_bucket_name`            | The name of the S3 bucket (if created) |
+| Name                        | Description                |
+|-----------------------------|----------------------------|
+| `iam_instance_profile_name`        | The name of the IAM instance profile                     |
+| `ssm_parameter_default_credential` | The public IP address of the EC2 instance                    |
+| `security_group_id`                | The ID of the Security Group                       |
+| `iam_role_name`                    | The name of the IAM role                        |
+| `s3_bucket_id`                     | The ID of the S3 bucket (if created)                    |
+| `eip_public_ip`                    | The Elastic IP address associated                  |
+| `s3_bucket_arn`                    | The ARN of the S3 bucket (if created)                    |
+| `cloudwatch_log_group_name`        | The name of the CloudWatch Logs group                       |
+| `route53_fqdn`                     | The DNS name (if created)                    |
+| `ssm_parameter_key_pair`           | The name of the SSM parameter storing the SSH private key |
+
 
 #### Modules
 - [terraform-aws-modules/key-pair/aws](https://registry.terraform.io/modules/terraform-aws-modules/key-pair/aws)
@@ -163,15 +173,19 @@ This table aims to provide clarity on the input variables, ensuring users can ta
 
 #### Resources
 
-- `aws_instance`
+- `aws_launch_template`
+- `aws_autoscaling_group`
 - `aws_iam_role`
 - `aws_iam_policy`
 - `aws_iam_instance_profile`
 - `aws_iam_role_policy_attachment`
 - `aws_ssm_parameter`
+- `aws_ssm_document` (optional)
+- `aws_ssm_association` (optional)
 - `aws_security_group`
 - `aws_eip`
-- `aws_cloudwatch_log_group`
+- `aws_iam_policy_attachment`
+- `aws_cloudwatch_log_group` (optional)
 - `aws_s3_bucket` (optional)
 - `aws_route53_record` (optional)
 
