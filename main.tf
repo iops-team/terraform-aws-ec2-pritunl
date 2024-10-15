@@ -133,9 +133,21 @@ resource "aws_iam_role_policy_attachment" "additional_instance_role_policy" {
 }
 
 resource "aws_eip" "pritunl" {
+  count    = var.eip_id == null ? 1 : 0
   instance = aws_instance.pritunl.id
 
   tags = var.tags
+}
+
+data "aws_eip" "pritunl" {
+  count = var.eip_id != null ? 1 : 0
+  id    = var.eip_id
+}
+
+resource "aws_eip_association" "pritunl" {
+  count         = var.eip_id != null ? 1 : 0
+  instance_id   = aws_instance.pritunl.id
+  allocation_id = var.eip_id
 }
 
 resource "aws_instance" "pritunl" {
@@ -331,9 +343,7 @@ resource "aws_route53_record" "pritunl" {
   name    = var.domain_name
   type    = "A"
   ttl     = "300"
-  records = [aws_eip.pritunl.public_ip]
-
-
+  records = [var.eip_id == null ? aws_eip.pritunl[0].public_ip : data.aws_eip.pritunl[0].public_ip]
 }
 
 
@@ -454,3 +464,4 @@ resource "aws_ssm_document" "restore_mongodb" {
     ]
   })
 }
+
