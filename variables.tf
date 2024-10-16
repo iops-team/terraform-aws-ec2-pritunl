@@ -208,3 +208,9 @@ variable "s3_force_destroy" {
   type        = bool
   default     = false
 }
+
+variable "additional_user_data" {
+  description = "Additional user data script to execute after Pritunl has started."
+  type        = string
+  default     = ""
+}
