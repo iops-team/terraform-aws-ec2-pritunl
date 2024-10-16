@@ -196,3 +196,9 @@ variable "auto_restore" {
   type        = bool
   default     = true
 }
+
+variable "cloudwatch_logs_retention_in_days" {
+  description = "Retention in days to configure for the CloudWatch log group"
+  type        = number
+  default     = 30
+}

@@ -281,7 +281,7 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
 resource "aws_cloudwatch_log_group" "pritunl_log_group" {
   count             = var.cloudwatch_logs ? 1 : 0
   name              = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_logs_retention_in_days
   tags              = var.tags
 }
 
