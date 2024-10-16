@@ -196,3 +196,15 @@ variable "auto_restore" {
   type        = bool
   default     = true
 }
+
+variable "eip_id" {
+  description = "The allocation ID of the existing Elastic IP to associate with the Pritunl instance"
+  type        = string
+  default     = null
+}
+
+variable "cloudwatch_logs_retention_in_days" {
+  description = "Retention in days to configure for the CloudWatch log group"
+  type        = number
+  default     = 30
+}
