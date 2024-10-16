@@ -33,8 +33,8 @@ EOF
 wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
 
 sudo apt update
-sudo apt upgrade -y 
-sudo apt install awscli wireguard wireguard-tools mongodb-org pritunl -y 
+sudo apt upgrade -y
+sudo apt install awscli wireguard wireguard-tools mongodb-org pritunl -y
 sudo sh -c 'echo "* hard nofile 64000" >> /etc/security/limits.conf'
 sudo sh -c 'echo "* soft nofile 64000" >> /etc/security/limits.conf'
 sudo sh -c 'echo "root hard nofile 64000" >> /etc/security/limits.conf'
@@ -51,7 +51,7 @@ if [ "${AUTO_RESTORE}" = "true" ]; then
     aws ssm send-command --document-name "$SSM_DOCUMENT_NAME" \
                          --targets Key=instanceids,Values=$INSTANCE_ID \
                          --parameters '{}' \
-                         --region "$AWS_DEFAULT_REGION"                     
+                         --region "$AWS_DEFAULT_REGION"
 fi
 
 # Install CloudWatch Agent
@@ -86,5 +86,8 @@ EOF
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:cloudwatch-agent-config.json -s
 fi
 PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')
-aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --type "SecureString" --overwrite    
+aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --type "SecureString" --overwrite
+
 sudo systemctl start pritunl
+
+${ADDITIONAL_USER_DATA}

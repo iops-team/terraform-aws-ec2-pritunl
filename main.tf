@@ -144,9 +144,9 @@ resource "aws_instance" "pritunl" {
     AUTO_RESTORE                = var.auto_restore
     BACKUP_FILE                 = ""
     SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb.name
-
-
+    ADDITIONAL_USER_DATA        = var.additional_user_data
   })
+
   iam_instance_profile = aws_iam_instance_profile.pritunl.name
 
   dynamic "root_block_device" {
