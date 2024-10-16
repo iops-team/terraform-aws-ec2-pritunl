@@ -213,6 +213,7 @@ module "s3" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+  force_destroy           = var.s3_force_destroy
 
   lifecycle_rule = var.s3_lifecycle_rule
 

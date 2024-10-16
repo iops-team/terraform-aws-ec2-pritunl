@@ -202,3 +202,9 @@ variable "cloudwatch_logs_retention_in_days" {
   type        = number
   default     = 30
 }
+
+variable "s3_force_destroy" {
+  description = "Enables Terraform to forcibly destroy the bucket with backups, permanently deleting its contents"
+  type        = bool
+  default     = false
+}
