@@ -214,3 +214,9 @@ variable "additional_user_data" {
   type        = string
   default     = ""
 }
+
+variable "additional_instance_role_policy_json" {
+  description = "Additional JSON formatted IAM policy to attach to the Pritunl EC2 instance role."
+  type        = string
+  default     = null
+}
