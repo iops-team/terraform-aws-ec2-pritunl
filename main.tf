@@ -97,6 +97,7 @@ resource "aws_iam_policy" "backups" {
   tags   = var.tags
 }
 
+
 resource "aws_iam_instance_profile" "pritunl" {
   name = local.iam_instance_profile_defaut_name
   role = aws_iam_role.pritunl.name
@@ -117,6 +118,19 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 
 }
 
+resource "aws_iam_policy" "additional_instance_role_policy" {
+  count = var.additional_instance_role_policy_json != null ? 1 : 0
+
+  policy = var.additional_instance_role_policy_json
+  tags   = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "additional_instance_role_policy" {
+  count = var.additional_instance_role_policy_json != null ? 1 : 0
+
+  policy_arn = aws_iam_policy.additional_instance_role_policy[0].arn
+  role       = aws_iam_role.pritunl.name
+}
 
 resource "aws_eip" "pritunl" {
   instance = aws_instance.pritunl.id
@@ -146,7 +160,6 @@ resource "aws_instance" "pritunl" {
     SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb.name
     ADDITIONAL_USER_DATA        = var.additional_user_data
   })
-
   iam_instance_profile = aws_iam_instance_profile.pritunl.name
 
   dynamic "root_block_device" {
@@ -440,4 +453,3 @@ resource "aws_ssm_document" "restore_mongodb" {
       }
     ]
   })
-}

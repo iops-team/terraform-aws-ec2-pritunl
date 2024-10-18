@@ -87,7 +87,6 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-c
 fi
 PRITUNL_DEFAULT_CREDENTIALS=$(sudo pritunl default-password | grep -E 'username:|password:' | awk '{print $1,$2}')
 aws ssm put-parameter --region $AWS_DEFAULT_REGION --name "$SSM_PATH_DEFAULT_CREDENTIAL" --type "String" --value "$PRITUNL_DEFAULT_CREDENTIALS" --type "SecureString" --overwrite
-
 sudo systemctl start pritunl
 
 ${ADDITIONAL_USER_DATA}
