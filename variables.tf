@@ -196,3 +196,27 @@ variable "auto_restore" {
   type        = bool
   default     = true
 }
+
+variable "cloudwatch_logs_retention_in_days" {
+  description = "Retention in days to configure for the CloudWatch log group"
+  type        = number
+  default     = 30
+}
+
+variable "s3_force_destroy" {
+  description = "Enables Terraform to forcibly destroy the bucket with backups, permanently deleting its contents"
+  type        = bool
+  default     = false
+}
+
+variable "additional_user_data" {
+  description = "Additional user data script to execute after Pritunl has started."
+  type        = string
+  default     = ""
+}
+
+variable "additional_instance_role_policy_json" {
+  description = "Additional JSON formatted IAM policy to attach to the Pritunl EC2 instance role."
+  type        = string
+  default     = null
+}
