@@ -42,7 +42,7 @@ data "aws_iam_policy_document" "backups" {
 
 
 resource "aws_iam_policy" "ssm_send_command_pritunl" {
-  name        = "SSMSendCommandPritunlPolicy"
+  name        = "${var.name}_SSMSendCommandPritunlPolicy"
   description = "Policy to allow sending commands via SSM to the Pritunl instance"
 
   policy = jsonencode({
@@ -53,7 +53,7 @@ resource "aws_iam_policy" "ssm_send_command_pritunl" {
         Action   = "ssm:SendCommand",
         Resource = [
           aws_instance.pritunl.arn,
-          aws_ssm_document.restore_mongodb.arn
+          aws_ssm_document.restore_mongodb[0].arn
         ]
       },
     ],
@@ -62,7 +62,7 @@ resource "aws_iam_policy" "ssm_send_command_pritunl" {
 
 
 resource "aws_iam_policy_attachment" "ssm_send_command_attachment" {
-  name       = "SSMSendCommandPolicyAttachment"
+  name       = "${var.name}_SSMSendCommandPolicyAttachment"
   policy_arn = aws_iam_policy.ssm_send_command_pritunl.arn
   roles      = [aws_iam_role.pritunl.name]
 }
@@ -143,7 +143,7 @@ resource "aws_instance" "pritunl" {
     AWS_DEFAULT_REGION          = data.aws_region.current.name,
     AUTO_RESTORE                = var.auto_restore
     BACKUP_FILE                 = ""
-    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb.name
+    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb[0].name
 
 
   })
@@ -257,7 +257,7 @@ resource "aws_security_group" "pritunl" {
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   count       = var.cloudwatch_logs ? 1 : 0
-  name        = "CloudWatchLogsPolicy"
+  name        = "${var.name}_CloudWatchLogsPolicy"
   description = "A policy that allows publishing logs to CloudWatch"
 
   policy = jsonencode({
@@ -280,14 +280,14 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
 
 resource "aws_cloudwatch_log_group" "pritunl_log_group" {
   count             = var.cloudwatch_logs ? 1 : 0
-  name              = coalesce(var.cloudwatch_logs_group_name, local.cw_logs_default_name)
+  name =  "${var.name}_${var.cloudwatch_logs_group_name}"
   retention_in_days = 30
   tags              = var.tags
 }
 
 
 resource "aws_iam_policy" "ssm_put_parameter" {
-  name        = "SSMPutParameterPolicy"
+  name        = "${var.name}_SSMPutParameterPolicy"
   description = "Policy to allow put parameter in SSM Parameter Store"
 
   policy = jsonencode({
@@ -418,7 +418,8 @@ resource "aws_ssm_association" "backup" {
 }
 
 resource "aws_ssm_document" "restore_mongodb" {
-  name          = "restore-mongodb-backup"
+  count = var.auto_restore ? 1 : 0
+  name          = "${var.name}_restore-mongodb-backup"
   document_type = "Command"
 
   content = jsonencode({

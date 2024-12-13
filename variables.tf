@@ -194,5 +194,5 @@ variable "s3_lifecycle_rule" {
 variable "auto_restore" {
   description = "Try to restore from the backup if it exists, if the backup does not exist, a new user will be created"
   type        = bool
-  default     = true
+  default     = false
 }
