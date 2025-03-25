@@ -42,6 +42,7 @@ data "aws_iam_policy_document" "backups" {
 
 
 resource "aws_iam_policy" "ssm_send_command_pritunl" {
+  count       = var.auto_restore ? 1 : 0
   name        = "${var.name}_SSMSendCommandPritunlPolicy"
   description = "Policy to allow sending commands via SSM to the Pritunl instance"
 
@@ -62,8 +63,9 @@ resource "aws_iam_policy" "ssm_send_command_pritunl" {
 
 
 resource "aws_iam_policy_attachment" "ssm_send_command_attachment" {
+  count       = var.auto_restore ? 1 : 0
   name       = "${var.name}_SSMSendCommandPolicyAttachment"
-  policy_arn = aws_iam_policy.ssm_send_command_pritunl.arn
+  policy_arn = aws_iam_policy.ssm_send_command_pritunl[0].arn
   roles      = [aws_iam_role.pritunl.name]
 }
 
@@ -143,7 +145,7 @@ resource "aws_instance" "pritunl" {
     AWS_DEFAULT_REGION          = data.aws_region.current.name,
     AUTO_RESTORE                = var.auto_restore
     BACKUP_FILE                 = ""
-    SSM_DOCUMENT_NAME           = aws_ssm_document.restore_mongodb[0].name
+    SSM_DOCUMENT_NAME           = var.auto_restore ? aws_ssm_document.restore_mongodb[0].name : ""
 
 
   })

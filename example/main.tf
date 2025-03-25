@@ -83,6 +83,8 @@ module "pritunl" {
         days                         = 30,
         expired_object_delete_marker = false
       },
+      filter = {
+      },
       noncurrent_version_expiration = [
         {
           noncurrent_days = 60
