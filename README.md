@@ -40,6 +40,7 @@ module "pritunl" {
   create_route53_record      = true
   zone_id                    = "Z069875012GQNG6IN9LUI"
   domain_name                = "vpn.example.com"
+  auto_restore               = true
 
   tags = {
     Environment = "production"
@@ -101,6 +102,8 @@ module "pritunl" {
         days                         = 30,
         expired_object_delete_marker = false
       },
+      filter = {
+      },      
       noncurrent_version_expiration = [
         {
           noncurrent_days = 60

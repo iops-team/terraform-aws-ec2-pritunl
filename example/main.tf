@@ -15,6 +15,7 @@ module "pritunl" {
   domain_name                = "vpn.example.com"
   backups_cron               = "cron(0 * * * ? *)"
   cloudwatch_logs_group_name = "example-pritunl-logs"
+  auto_restore               = true
 
   tags = {
     Environment = "production"
